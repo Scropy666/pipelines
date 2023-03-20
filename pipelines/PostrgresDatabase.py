@@ -1,70 +1,59 @@
 import psycopg2
 from psycopg2 import Error
-from .utils import print_error
-import sys
-import pandas as pd
-from sqlalchemy import create_engine
-from urllib.parse import urlparse
-import csv
+from .config import POSTGRES_PASSWORD, POSTGRES_USER, POSTGRES_DB, POSTGRES_HOST
 
-class PostrgesDB:
-    def __init__(self):
+
+class PostgresDB:
+    def __init__(self, dbname=POSTGRES_DB, user=POSTGRES_USER, password=POSTGRES_PASSWORD, host=POSTGRES_HOST, port='5432'):
         try:
-            self.connection = psycopg2.connect(user="postgres",
-                                  password="1234",
-                                  host="localhost",
-                                  port="5432",
-                                  database="pipelines")
-            self.connection.autocommit = True
-            self.cursor = self.connection.cursor()
+            self.conn = psycopg2.connect(dbname=dbname, user=user, password=password, host=host, port=port)
+            self.cursor = self.conn.cursor()
+            # Распечатать сведения о PostgreSQL
             print("Информация о сервере PostgreSQL")
-            print(self.connection.get_dsn_parameters(), "\n")
+            print(self.conn.get_dsn_parameters(), "\n")
             # Выполнение SQL-запроса
             self.cursor.execute("SELECT version();")
             # Получить результат
             record = self.cursor.fetchone()
             print("Вы подключены к - ", record, "\n")
         except (Exception, Error) as error:
-            print_error(f"Ошибка PostgreSQL: {error}")
-            sys.exit(1)
+            print("Ошибка при работе с PostgreSQL", error)
 
     def run_query(self, query):
         try:
             self.cursor.execute(query)
         except (Exception, Error) as error:
-            print_error(f"Ошибка PostgreSQL: {error}")
-            sys.exit(1)
+            print("Ошибка при работе с PostgreSQL", error)
 
-    def load_data_to_table(self, input_file, table):
-        df = pd.read_csv(input_file)
+    def load_data_to_table(self, input_file, table_name):
+        query = f"COPY {table_name} FROM STDIN DELIMITER ',' CSV HEADER"
+        self.cursor.copy_expert(query, open(input_file, "r"))
+    def copy_to_file(self, table_name, output_file):
+        query = f"COPY (SELECT * FROM {table_name}) TO STDOUT DELIMITER ',' CSV HEADER"
+        self.cursor.copy_expert(query, open(output_file, "w"))
 
-        df.to_sql(table, self.connection, if_exists='replace')
-        sql1 = f'select * from public."{table}"'
-        self.cursor.execute(sql1)
-        for i in self.cursor.fetchall():
-            print(i)
+    def create_table_as(self, name, sql_query):
+        query = f"""
+                    CREATE TABLE IF NOT EXISTS {name} as {sql_query}
+                """
+        self.run_query(query)
+    def create_table_domain_of_url(self):
+        self.run_query("drop function if exists domain_of_url;")
 
-    def load_data_to_table_with_domain(self, input_file, table):
-        df = pd.read_csv(input_file)
-        df['domain_of_url'] = df['url']
-        df['domain_of_url'] = df['domain_of_url'].apply((lambda x: urlparse(x).netloc))
+        query = """
+                create function domain_of_url(url text)
+                returns text
+                language plpgsql
+                as
+                $$
+                declare
+                   domain_of_url text;
+                begin
+                   select (regexp_matches(url, '\/\/(.*?)\/', 'g'))[1]
+                   into domain_of_url;
 
-        df.to_sql(table, self.connection, if_exists='replace')
-        sql1 = f'select * from public."{table}"'
-        self.cursor.execute(sql1)
-        for i in self.cursor.fetchall():
-            print(i)
-
-    def copy_data_to_file(self, table, output_file):
-        sql1 = f'select * from public."{table}"'
-        self.cursor.execute(sql1)
-
-        with open(output_file, 'w') as f:
-            writer = csv.writer(f)
-            for row in self.cursor.fetchall():
-                writer.writerow(row)
-
-    def close_connection(self):
-        if self.connection:
-            self.cursor.close()
-            self.connection.close()
+                   return domain_of_url;
+                end;
+                $$;
+                """
+        self.run_query(query)

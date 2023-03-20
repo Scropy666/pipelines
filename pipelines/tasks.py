@@ -1,6 +1,10 @@
-from .PostrgresDatabase import PostrgesDB
+import os
+from .PostrgresDatabase import PostgresDB
 
-db = PostrgesDB()
+
+DB = PostgresDB()
+
+
 class BaseTask:
     """Base Pipeline Task"""
 
@@ -16,17 +20,22 @@ class BaseTask:
 
 
 class CopyToFile(BaseTask):
-    """Copy table data to CSV file"""
+    """Copy table norm to CSV file"""
 
     def __init__(self, table, output_file):
         self.table = table
-        self.output_file = output_file
+
+        # добавим папку, в которую сохраняются результаты
+        if output_file.rsplit('.', 1)[-1] == "csv":
+            self.output_file = output_file
+        else:
+            self.output_file = f"{output_file}.csv"
 
     def short_description(self):
         return f'{self.table} -> {self.output_file}'
 
     def run(self):
-        db.copy_data_to_file(self.table, self.output_file)
+        DB.copy_to_file(self.table, self.output_file)
         print(f"Copy table `{self.table}` to file `{self.output_file}`")
 
 
@@ -41,11 +50,8 @@ class LoadFile(BaseTask):
         return f'{self.input_file} -> {self.table}'
 
     def run(self):
-        db.run_query(f"CREATE TABLE IF NOT EXISTS {self.table} (id SERIAL PRIMARY KEY, name varchar, url varchar)")
-
-        db.load_data_to_table(self.input_file, self.table)
-
-        db.load_data_to_table_with_domain(self.input_file, self.table)
+        DB.run_query(f"CREATE TABLE IF NOT EXISTS {self.table} (id SERIAL PRIMARY KEY, name varchar, url varchar)")
+        DB.load_data_to_table(self.input_file, self.table)
 
         print(f"Load file `{self.input_file}` to table `{self.table}`")
 
@@ -61,9 +67,9 @@ class RunSQL(BaseTask):
         return f'{self.title}'
 
     def run(self):
-        db.run_query(self.sql_query)
-        print(f"Run SQL ({self.title}):\n{self.sql_query}")
+        DB.run_query(self.sql_query)
 
+        print(f"Run SQL ({self.title}):\n{self.sql_query}")
 
 
 class CTAS(BaseTask):
@@ -78,22 +84,6 @@ class CTAS(BaseTask):
         return f'{self.title}'
 
     def run(self):
-        db.run_query(
-            f'''CREATE TABLE IF NOT EXISTS {self.table} 
-                        (id SERIAL PRIMARY KEY, name varchar, url varchar, domain_of_url varchar)''')
-
-        db.run_query('drop function if exists domain_of_url(varchar)')
-
-        db.run_query('''CREATE FUNCTION domain_of_url(url varchar) RETURNS varchar AS $$
-                                DECLARE
-                                    domain varchar;
-                                BEGIN
-                                    select substring(url from '.*://([^/]*)') into domain;
-                                    return domain;
-                                END;
-                                $$ LANGUAGE plpgsql;
-                            ''')
-
-        db.run_query(f'insert into {self.table} ({self.sql_query})')
-
+        DB.create_table_domain_of_url()
+        DB.run_query(f""" CREATE TABLE IF NOT EXISTS {self.table} as {self.sql_query}""")
         print(f"Create table `{self.table}` as SELECT:\n{self.sql_query}")
