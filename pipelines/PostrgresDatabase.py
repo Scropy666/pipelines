@@ -53,11 +53,6 @@ class PostgresDB:
         query = f"COPY (SELECT * FROM {table_name}) TO STDOUT DELIMITER ',' CSV HEADER"
         self.cursor.copy_expert(query, open(output_file, "w"))
 
-    # def create_table_as(self, name, sql_query):
-    #     query = f"""
-    #                 CREATE TABLE IF NOT EXISTS {name} as {sql_query}
-    #             """
-    #     self.run_query(query)
 
     def create_table_domain_of_url(self):
         self.run_query("drop function if exists domain_of_url;")
