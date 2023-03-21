@@ -19,7 +19,6 @@ COPY ./db /pipelines/db
 COPY ./example_pipeline/norm /pipelines/example_pipeline/norm
 COPY ./example_pipeline/pipeline.py /pipelines/example_pipeline/
 COPY ./pipelines /pipelines/pipelines
-COPY ./tests /pipelines/tests
 COPY ./setup.py /pipelines
 COPY ./README.md /pipelines
 RUN pip install .
