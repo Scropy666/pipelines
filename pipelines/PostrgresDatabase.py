@@ -1,11 +1,11 @@
 import psycopg2
 from psycopg2 import Error
 import pandas as pd
-from .config import POSTGRES_PASSWORD, POSTGRES_USER, POSTGRES_DB, POSTGRES_HOST
+
 
 
 class PostgresDB:
-    def __init__(self, dbname=POSTGRES_DB, user=POSTGRES_USER, password=POSTGRES_PASSWORD, host=POSTGRES_HOST, port='5432'):
+    def __init__(self, dbname='Pipelines', user='postgres', password='QWERTY345p', host='db', port='5432'):
         try:
             self.conn = psycopg2.connect(dbname=dbname, user=user, password=password, host=host, port=port)
             self.cursor = self.conn.cursor()
